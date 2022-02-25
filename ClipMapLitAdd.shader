@@ -5,6 +5,7 @@ Shader "Unlit/ClipMapLitAdd"
         _HeightMapArr ("HeightMap Array", 2DArray) = "" {}
         _SplitMapArr ("_SplitMap Array", 2DArray) = "" {}
         _NormalMapArr("_NromalMap Array", 2DArray) = "" {}
+
         [HideInInspector] _Splat3("Layer 3 (A)", 2D) = "grey" {}
         [HideInInspector] _Splat2("Layer 2 (B)", 2D) = "grey" {}
         [HideInInspector] _Splat1("Layer 1 (G)", 2D) = "grey" {}
