@@ -212,7 +212,7 @@ Varyings vert(Attributes v)
     float3 cameraWS = CameraPosition;//GetCameraPositionWS();
     half d = length(half3(positionWS.x - cameraWS.x, positionWS.y - cameraWS.y, positionWS.z - cameraWS.z));
 
-    half morphLerpK = clamp((d - CLIP_DIM.z - CLIP_DIM.x * CLIP_DIM.z) / (CLIP_DIM.z - CLIP_DIM.x * CLIP_DIM.z), 0.0, 1.0);
+    half morphLerpK = clamp((d - CLIP_DIM.z - 0.667 * CLIP_DIM.z) / (CLIP_DIM.z - 0.667 * CLIP_DIM.z), 0.0, 1.0);
     positionWS = morphVertex((v.positionOS), positionWS, morphLerpK, float2(CLIP_DIM.y, CLIP_DIM.y));
 
     int _ox = (int)(positionWS.x / 512);
