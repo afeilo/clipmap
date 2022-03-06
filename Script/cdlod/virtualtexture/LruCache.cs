@@ -8,57 +8,124 @@ namespace VirtualTexture
         public class NodeInfo
         {
             public int id = 0;
+            public int x = -1;//坐标
+            public int y = -1;
             public NodeInfo Next { get; set; }
             public NodeInfo Prev { get; set; }
+            /// <summary>
+            /// hashcode
+            /// </summary>
+            /// <returns></returns>
+
+            public override int GetHashCode()
+            {
+                return id;
+            }
         }
 
+        class NodeComparer : IEqualityComparer<NodeInfo>
+        {
+            public bool Equals(NodeInfo x, NodeInfo y)
+            {
+                return x.GetHashCode() == y.GetHashCode();
+            }
+
+            public int GetHashCode(NodeInfo node)
+            {
+                return node.GetHashCode();
+            }
+        }
+
+        private HashSet<NodeInfo> nodeInfos;
+
+        private int nodeCount;
+        private int rowCount;
+        private int allCount;
         private NodeInfo [] allNodes;
         private NodeInfo head = null;
         private NodeInfo tail = null;
+        private NodeInfo temp = new NodeInfo();
 
         public int First { get { return head.id; } }
 
-        public void Init(int count)
+        public void Init(int rowCount)
         {
-            allNodes = new NodeInfo[count];
-            for (int i= 0;i < count;i++)
-            {
-                allNodes[i] = new NodeInfo()
-                {
-                    id = i,
-                };
-            }
-            for (int i = 0; i < count; i++)
-            {
-                allNodes[i].Next = (i + 1 < count) ? allNodes[i + 1] : null;
-                allNodes[i].Prev = (i != 0) ? allNodes[i - 1] : null;
-            }
-            head = allNodes[0];
-            tail = allNodes[count - 1];
+            this.rowCount = rowCount;
+            nodeInfos = new HashSet<NodeInfo>(new NodeComparer());
+            nodeCount = rowCount * rowCount;
         }
 
-        public bool SetActive(int id)
+        /// <summary>
+        /// 根据id获取node
+        /// </summary>
+        /// <param name="id"></param>
+        /// <returns></returns>
+        public NodeInfo GetNode(int id)
         {
-            if (id < 0 || id >= allNodes.Length)
-                return false;
+            temp.id = id;
+            NodeInfo node;
+            nodeInfos.TryGetValue(temp, out node);
+            return node;
+        }
 
-            var node = allNodes[id];
-            if(node == tail)
+        /// <summary>
+        /// 激活一个node
+        /// </summary>
+        /// <param name="id"></param>
+        /// <returns></returns>
+        public NodeInfo SetActive(int id)
+        {
+            temp.id = id;
+            NodeInfo node = null;
+            if (nodeInfos.Contains(temp))
             {
-                return true;
+                nodeInfos.TryGetValue(temp, out node);
+                if (node != tail)
+                {
+                    Remove(node);
+                    AddLast(node);
+                }
             }
+            else
+            {
+                if (allCount >= nodeCount)
+                {
+                    node = new NodeInfo() {id = id, x = head.x, y = head.y};
+                    nodeInfos.Remove(head);
+                    AddLast(node);
+                    RemoveFirst();
 
-            Remove(node);
-            AddLast(node);
-            return true;
+                }
+                else
+                {
+                    node = new NodeInfo() {id = id, x = (allCount) % rowCount, y = allCount / rowCount};
+                    AddLast(node);
+                    allCount = allCount + 1;
+                }
+                nodeInfos.Add(node);
+            }
+            return node;
         }
 
         private void AddLast(NodeInfo node)
         {
+            if (null == tail)
+            {
+                tail = node;
+                head = node;
+                return;
+            }
             var lastTail = tail;
             lastTail.Next = node;
             tail = node;
             node.Prev = lastTail;
+        }
+
+        private void RemoveFirst()
+        {
+            var firstNode = head.Next;
+            firstNode.Prev = null;
+            head = firstNode;
         }
 
         private void Remove(NodeInfo node)
@@ -74,4 +141,5 @@ namespace VirtualTexture
             }
         }
     }
+    
 }

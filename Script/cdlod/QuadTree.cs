@@ -29,7 +29,8 @@ public class QuadTree
             {
                 var x = topNodeSize * i - mapSize / 2 + topNodeSize / 2;
                 var y = topNodeSize * j - mapSize / 2 + topNodeSize / 2;
-                var node = InitNode(x, y, config.startLevel, config.endLevel);
+                var node = InitNode(x, y, config.startLevel, config.endLevel, null, Vector2.zero);
+                node.path = string.Format(@"Assets/Clipmap/HeightMap/height_{0}.png", (3 - i) * 4 + j);
                 topLevelNode.Add(node);
             }
         }
@@ -78,24 +79,13 @@ public class QuadTree
                 {
                     selectNodeList.Add(new SelectNode() { node = node , chooseBit = b});
                 }
-                //else
-                //{
-                //    if ((b & 1) == 0)
-                //        selectNodeList.Add(node.subTL);
-                //    if ((b & 2) == 0)
-                //        selectNodeList.Add(node.subTR);
-                //    if ((b & 4) == 0)
-                //        selectNodeList.Add(node.subBL);
-                //    if ((b & 8) == 0)
-                //        selectNodeList.Add(node.subBR);
-                //}
             }
             return true;
         }
         return false;
     }
 
-    Node InitNode(int x, int y, int level, int endLevel)
+    Node InitNode(int x, int y, int level, int endLevel, Node parent, Vector2 offset)
     {
         if (level < endLevel)
             return null;
@@ -104,10 +94,12 @@ public class QuadTree
         node.x = x;
         node.y = y;
         node.size = size;
-        node.subTL = InitNode(x - size / 4, y + size / 4, level - 1, endLevel);
-        node.subTR = InitNode(x + size / 4, y + size / 4, level - 1, endLevel);
-        node.subBL = InitNode(x - size / 4, y - size / 4, level - 1, endLevel);
-        node.subBR = InitNode(x + size / 4, y - size / 4, level - 1, endLevel);
+        node.parent = parent;
+        node.subTL = InitNode(x - size / 4, y + size / 4, level - 1, endLevel, node, new Vector2(0,0.5f));
+        node.subTR = InitNode(x + size / 4, y + size / 4, level - 1, endLevel, node, new Vector2(0.5f, 0.5f));
+        node.subBL = InitNode(x - size / 4, y - size / 4, level - 1, endLevel, node, new Vector2(0, 0));
+        node.subBR = InitNode(x + size / 4, y - size / 4, level - 1, endLevel, node, new Vector2(0.5f, 0));
+        node.offset = offset;
         return node;
     }
 }
@@ -128,6 +120,11 @@ public class Node
     /// 格子尺寸
     /// </summary>
     public int size;
+
+    /// <summary>
+    /// 父节点
+    /// </summary>
+    public Node parent;
     /// <summary>
     /// 四个子节点
     /// </summary>
@@ -135,6 +132,12 @@ public class Node
     public Node subTR;
     public Node subBL;
     public Node subBR;
+
+    public Vector2 offset;
+    /// <summary>
+    /// 地块加载路径
+    /// </summary>
+    public string path;
 
     public float CaclMinLerpValue(Vector3 pos)
     {
@@ -180,7 +183,7 @@ public class Node
 
     public override int GetHashCode()
     {
-        return (x + 100) * 10000 + (y + 100);
+        return (x + 2048) * 10000 + (y + 2048);
     }
 }
 

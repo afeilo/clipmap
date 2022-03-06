@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 
-[ExecuteAlways]
 public class CDLODRenderer : MonoBehaviour
 {
     public TerrainData data;
@@ -19,6 +18,18 @@ public class CDLODRenderer : MonoBehaviour
     List<Matrix4x4> matrices = new List<Matrix4x4>();
     List<Matrix4x4> halfMatrices = new List<Matrix4x4>();
     // Start is called before the first frame update
+
+    private VTPageTable _vtPageTable;
+    VTPageTable vtPageTable
+    {
+        get
+        {
+            if (null == _vtPageTable)
+                _vtPageTable = GetComponent<VTPageTable>();
+            return _vtPageTable;
+        }
+    }
+
     void Start()
     {
         
@@ -66,11 +77,13 @@ public class CDLODRenderer : MonoBehaviour
         // generate tile mesh
         {
             List<Vector3> vertices = new List<Vector3>();
+            List<Vector2> uvs = new List<Vector2>();
             for (int y = 0; y < PATCH_VERT_RESOLUTION; y++)
             {
                 for (int x = 0; x < PATCH_VERT_RESOLUTION; x++)
                 {
                     vertices.Add(new Vector3(x, 0, y));
+                    uvs.Add(new Vector2((float)x / TILE_RESOLUTION, (float)y / TILE_RESOLUTION));
                 }
             }
             List<int> indices = new List<int>(TILE_RESOLUTION * TILE_RESOLUTION * 6);
@@ -88,17 +101,20 @@ public class CDLODRenderer : MonoBehaviour
             }
             tileMesh = new Mesh();
             tileMesh.SetVertices(vertices);
+            tileMesh.SetUVs(0, uvs);
             tileMesh.SetIndices(indices, MeshTopology.Triangles, 0);
         }
         // generate half tile mesh
         {
             var resolution = TILE_RESOLUTION / 2;
             List<Vector3> vertices = new List<Vector3>();
+            List<Vector2> uvs = new List<Vector2>();
             for (int y = 0; y < resolution + 1; y++)
             {
                 for (int x = 0; x < resolution + 1; x++)
                 {
                     vertices.Add(new Vector3(x, 0, y));
+                    uvs.Add(new Vector2((float)x / resolution, (float)y / resolution));
                 }
             }
             List<int> indices = new List<int>(resolution * resolution * 6);
@@ -116,6 +132,7 @@ public class CDLODRenderer : MonoBehaviour
             }
             halfTileMesh = new Mesh();
             halfTileMesh.SetVertices(vertices);
+            halfTileMesh.SetUVs(0, uvs);
             halfTileMesh.SetIndices(indices, MeshTopology.Triangles, 0);
         }
     }
@@ -131,7 +148,9 @@ public class CDLODRenderer : MonoBehaviour
         MaterialPropertyBlock block = new MaterialPropertyBlock();
         MaterialPropertyBlock halfblock = new MaterialPropertyBlock();
         List<Vector4> dims = new List<Vector4>();
+        List<Vector4> offsetScales = new List<Vector4>();
         List<Vector4> halfDims = new List<Vector4>();
+        List<Vector4> halfOffsetScales = new List<Vector4>();
         matrices.Clear();
         halfMatrices.Clear();
         var t = Camera.main.transform.position;
@@ -140,14 +159,27 @@ public class CDLODRenderer : MonoBehaviour
         for (int i = 0; i < nodes.Count; i++)
         {
             var node = nodes[i].node;
+            vtPageTable.ActiveNode(node);
+        }
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            var node = nodes[i].node;
             var chooseBit = nodes[i].chooseBit;
             int scale = node.size / TILE_RESOLUTION;
+            Vector4 pageOffsetScale;
+            Vector4 nodeOffsetScale;
+            vtPageTable.GetNodeOffsetScale(node, out nodeOffsetScale, out pageOffsetScale);
             if (0 == chooseBit)
             {
                 var transM = Matrix4x4.Translate(new Vector3(node.x - node.size / 2, 0, node.y - node.size / 2));
                 var scaleM = Matrix4x4.Scale(Vector3.one * scale);
                 matrices.Add(transM * scaleM);
                 dims.Add(new Vector4(treeConfig.lerpValua, (node.size / TILE_RESOLUTION), node.size, TILE_RESOLUTION));
+                offsetScales.Add(new Vector4(
+                    pageOffsetScale.x + nodeOffsetScale.x * pageOffsetScale.z, 
+                    pageOffsetScale.y + nodeOffsetScale.y * pageOffsetScale.w,
+                    pageOffsetScale.z * nodeOffsetScale.z ,
+                    pageOffsetScale.w * nodeOffsetScale.w ));
             }
             else
             {
@@ -158,6 +190,18 @@ public class CDLODRenderer : MonoBehaviour
                     var scaleM = Matrix4x4.Scale(Vector3.one * scale);
                     halfMatrices.Add(transM * scaleM);
                     halfDims.Add(new Vector4(treeConfig.lerpValua, (node.size / TILE_RESOLUTION), node.size, TILE_RESOLUTION));
+                    var offset = new Vector2(0, 0.5f);
+                    var newOffsetScale = Vector4.zero;
+                    newOffsetScale.x = nodeOffsetScale.x + offset.x * nodeOffsetScale.z;
+                    newOffsetScale.y = nodeOffsetScale.y + offset.y * nodeOffsetScale.w;
+                    newOffsetScale.z = nodeOffsetScale.z * 0.5f;
+                    newOffsetScale.w = nodeOffsetScale.w * 0.5f;
+
+                    halfOffsetScales.Add(new Vector4(
+                        pageOffsetScale.x + newOffsetScale.x * pageOffsetScale.z, 
+                        pageOffsetScale.y + newOffsetScale.y * pageOffsetScale.w,
+                        newOffsetScale.z * pageOffsetScale.z,
+                        newOffsetScale.w * pageOffsetScale.w));
                 }
                 if ((chooseBit & 2) == 0)
                 {
@@ -166,6 +210,18 @@ public class CDLODRenderer : MonoBehaviour
                     var scaleM = Matrix4x4.Scale(Vector3.one * scale);
                     halfMatrices.Add(transM * scaleM);
                     halfDims.Add(new Vector4(treeConfig.lerpValua, (node.size / TILE_RESOLUTION), node.size, TILE_RESOLUTION));
+                    var offset = new Vector2(0.5f, 0.5f);
+                    var newOffsetScale = Vector4.zero;
+                    newOffsetScale.x = nodeOffsetScale.x + offset.x * nodeOffsetScale.z;
+                    newOffsetScale.y = nodeOffsetScale.y + offset.y * nodeOffsetScale.w;
+                    newOffsetScale.z = nodeOffsetScale.z * 0.5f;
+                    newOffsetScale.w = nodeOffsetScale.w * 0.5f;
+
+                    halfOffsetScales.Add(new Vector4(
+                        pageOffsetScale.x + newOffsetScale.x * pageOffsetScale.z,
+                        pageOffsetScale.y + newOffsetScale.y * pageOffsetScale.w,
+                        newOffsetScale.z * pageOffsetScale.z,
+                        newOffsetScale.w * pageOffsetScale.w));
                 }
                 if ((chooseBit & 4) == 0)
                 {
@@ -174,6 +230,18 @@ public class CDLODRenderer : MonoBehaviour
                     var scaleM = Matrix4x4.Scale(Vector3.one * scale);
                     halfMatrices.Add(transM * scaleM);
                     halfDims.Add(new Vector4(treeConfig.lerpValua, (node.size / TILE_RESOLUTION), node.size, TILE_RESOLUTION));
+                    var offset = new Vector2(0, 0);
+                    var newOffsetScale = Vector4.zero;
+                    newOffsetScale.x = nodeOffsetScale.x + offset.x * nodeOffsetScale.z;
+                    newOffsetScale.y = nodeOffsetScale.y + offset.y * nodeOffsetScale.w;
+                    newOffsetScale.z = nodeOffsetScale.z * 0.5f;
+                    newOffsetScale.w = nodeOffsetScale.w * 0.5f;
+
+                    halfOffsetScales.Add(new Vector4(
+                        pageOffsetScale.x + newOffsetScale.x * pageOffsetScale.z,
+                        pageOffsetScale.y + newOffsetScale.y * pageOffsetScale.w,
+                        newOffsetScale.z * pageOffsetScale.z,
+                        newOffsetScale.w * pageOffsetScale.w));
                 }
                 if ((chooseBit & 8) == 0)
                 {
@@ -182,14 +250,28 @@ public class CDLODRenderer : MonoBehaviour
                     var scaleM = Matrix4x4.Scale(Vector3.one * scale);
                     halfMatrices.Add(transM * scaleM);
                     halfDims.Add(new Vector4(treeConfig.lerpValua, (node.size / TILE_RESOLUTION), node.size, TILE_RESOLUTION));
+                    var offset = new Vector2(0.5f, 0);
+                    var newOffsetScale = Vector4.zero;
+                    newOffsetScale.x = nodeOffsetScale.x + offset.x * nodeOffsetScale.z;
+                    newOffsetScale.y = nodeOffsetScale.y + offset.y * nodeOffsetScale.w;
+                    newOffsetScale.z = nodeOffsetScale.z * 0.5f;
+                    newOffsetScale.w = nodeOffsetScale.w * 0.5f;
+
+                    halfOffsetScales.Add(new Vector4(
+                        pageOffsetScale.x + newOffsetScale.x * pageOffsetScale.z,
+                        pageOffsetScale.y + newOffsetScale.y * pageOffsetScale.w,
+                        newOffsetScale.z * pageOffsetScale.z,
+                        newOffsetScale.w * pageOffsetScale.w));
                 }
             }
         }
         block.SetVectorArray("CLIP_DIM", dims);
+        block.SetVectorArray("OFFSET_SCALE", offsetScales);
         Graphics.DrawMeshInstanced(tileMesh, 0, material, matrices, block);
         Graphics.DrawMeshInstanced(tileMesh, 0, material2, matrices, block);
 
         halfblock.SetVectorArray("CLIP_DIM", halfDims);
+        halfblock.SetVectorArray("OFFSET_SCALE", halfOffsetScales);
         Graphics.DrawMeshInstanced(halfTileMesh, 0, material, halfMatrices, halfblock);
         Graphics.DrawMeshInstanced(halfTileMesh, 0, material2, halfMatrices, halfblock);
         //float Gap = 1;

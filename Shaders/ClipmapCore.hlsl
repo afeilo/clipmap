@@ -29,6 +29,7 @@ struct Varyings
 #endif
     half4 fogFactorAndVertexLight   : TEXCOORD6; // x: fogFactor, yzw: vertex light
     float3 positionWS               : TEXCOORD7;
+    float4 color                    : TEXCOORD8;
     float4 positionCS : SV_POSITION;
     UNITY_VERTEX_INPUT_INSTANCE_ID
 };
@@ -36,7 +37,13 @@ struct Varyings
 UNITY_INSTANCING_BUFFER_START(Props)
 UNITY_DEFINE_INSTANCED_PROP(float4, CLIP_DIM)
 #define CLIP_DIM UNITY_ACCESS_INSTANCED_PROP(Props, CLIP_DIM)
+UNITY_DEFINE_INSTANCED_PROP(float4, OFFSET_SCALE)
+#define OFFSET_SCALE UNITY_ACCESS_INSTANCED_PROP(Props, OFFSET_SCALE)
 UNITY_INSTANCING_BUFFER_END(Props)
+
+
+Texture2D _VTTiledTex;
+SAMPLER(sampler_VTTiledTex);
 
 Texture2DArray _HeightMapArr;
 SAMPLER(sampler_HeightMapArr);
@@ -233,9 +240,16 @@ Varyings vert(Attributes v)
 
     uv *= (256.0 / 257.0);
     uv += (1.0 / 514.0);
+    #ifdef TERRAIN_VT
+    float2 texcoord = v.texcoord * OFFSET_SCALE.zw + OFFSET_SCALE.xy;
+    float4 color = SAMPLE_TEXTURE2D_LOD(_VTTiledTex, sampler_VTTiledTex, texcoord , 0);
+    #else
     float4 color = SAMPLE_TEXTURE2D_ARRAY_LOD(_HeightMapArr, sampler_HeightMapArr, uv, index, 0);
+    #endif
+    o.color = color;
+
     float height = UnpackHeightmap2(color);
-    positionWS.y = height;
+    //positionWS.y = height;
     o.positionCS = TransformWorldToHClip(positionWS);
 
     half3 SH = half3(0, 0, 0);
@@ -269,6 +283,7 @@ Varyings vert(Attributes v)
 
 half4 frag(Varyings i) : SV_Target
 {
+    return i.color;
     int _ox = (int)(i.positionWS.x / 512);
     int _oz = (int)(i.positionWS.z / 512);
     float x = i.positionWS.x - _ox * 512.0f + 512.0f;
